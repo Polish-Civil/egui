@@ -10,22 +10,30 @@ const EGUI_MEMORY_KEY: &str = "egui";
 const WINDOW_KEY: &str = "window";
 
 #[cfg(feature = "persistence")]
-fn deserialize_window_settings(storage: &Option<Box<dyn epi::Storage>>) -> Option<WindowSettings> {
+fn deserialize_window_settings(
+    storage: &Option<Box<dyn epi::Storage>>,
+) -> Option<WindowSettings> {
     epi::get_value(&**storage.as_ref()?, WINDOW_KEY)
 }
 
 #[cfg(not(feature = "persistence"))]
-fn deserialize_window_settings(_: &Option<Box<dyn epi::Storage>>) -> Option<WindowSettings> {
+fn deserialize_window_settings(
+    _: &Option<Box<dyn epi::Storage>>,
+) -> Option<WindowSettings> {
     None
 }
 
 #[cfg(feature = "persistence")]
-fn deserialize_memory(storage: &Option<Box<dyn epi::Storage>>) -> Option<egui::Memory> {
+fn deserialize_memory(
+    storage: &Option<Box<dyn epi::Storage>>,
+) -> Option<egui::Memory> {
     epi::get_value(&**storage.as_ref()?, EGUI_MEMORY_KEY)
 }
 
 #[cfg(not(feature = "persistence"))]
-fn deserialize_memory(_: &Option<Box<dyn epi::Storage>>) -> Option<egui::Memory> {
+fn deserialize_memory(
+    _: &Option<Box<dyn epi::Storage>>,
+) -> Option<egui::Memory> {
     None
 }
 
@@ -89,33 +97,59 @@ fn create_display(
         .with_transparent(native_options.transparent)
         .with_window_icon(window_icon);
 
-    window_builder =
-        window_builder_drag_and_drop(window_builder, native_options.drag_and_drop_support);
+    window_builder = window_builder_drag_and_drop(
+        window_builder,
+        native_options.drag_and_drop_support,
+    );
 
     let initial_size_points = native_options.initial_window_size;
 
     if let Some(window_settings) = &window_settings {
         window_builder = window_settings.initialize_size(window_builder);
     } else if let Some(initial_size_points) = initial_size_points {
-        window_builder = window_builder.with_inner_size(glutin::dpi::LogicalSize {
-            width: initial_size_points.x as f64,
-            height: initial_size_points.y as f64,
-        });
+        window_builder =
+            window_builder.with_inner_size(glutin::dpi::LogicalSize {
+                width: initial_size_points.x as f64,
+                height: initial_size_points.y as f64,
+            });
     }
-
     let context_builder = glutin::ContextBuilder::new()
         .with_depth_buffer(0)
         .with_srgb(true)
         .with_stencil_buffer(0)
         .with_vsync(true);
 
-    let display = glium::Display::new(window_builder, context_builder, event_loop).unwrap();
+    let display =
+        glium::Display::new(window_builder, context_builder, event_loop)
+            .unwrap();
 
+    let center = calculate_center_position(&display);
+    display.gl_window().window().set_outer_position(center);
     if let Some(window_settings) = &window_settings {
         window_settings.restore_positions(&display);
     }
 
     display
+}
+
+fn calculate_center_position(
+    display: &glium::Display,
+) -> glutin::dpi::Position {
+    let display_gl_window = display.gl_window();
+    let display_window = display_gl_window.window();
+    let monitor = display_window.current_monitor().unwrap();
+    let monitor_size = monitor.size();
+    let monitor_scale_factor = monitor.scale_factor();
+    let monitor_logical_size: glutin::dpi::LogicalSize<f64> =
+        monitor_size.to_logical(monitor_scale_factor);
+
+    let window_size = display_window.outer_size();
+    let window_logical_size: glutin::dpi::LogicalSize<f64> =
+        window_size.to_logical(monitor_scale_factor);
+    glutin::dpi::Position::Logical(glutin::dpi::LogicalPosition::new(
+        monitor_logical_size.width / 2f64 - window_logical_size.width / 2f64,
+        monitor_logical_size.height / 2f64 - window_logical_size.height / 2f64,
+    ))
 }
 
 #[cfg(not(feature = "persistence"))]
@@ -125,7 +159,9 @@ fn create_storage(_app_name: &str) -> Option<Box<dyn epi::Storage>> {
 
 #[cfg(feature = "persistence")]
 fn create_storage(app_name: &str) -> Option<Box<dyn epi::Storage>> {
-    if let Some(proj_dirs) = directories_next::ProjectDirs::from("", "", app_name) {
+    if let Some(proj_dirs) =
+        directories_next::ProjectDirs::from("", "", app_name)
+    {
         let data_dir = proj_dirs.data_dir().to_path_buf();
         if let Err(err) = std::fs::create_dir_all(&data_dir) {
             eprintln!(
@@ -136,7 +172,8 @@ fn create_storage(app_name: &str) -> Option<Box<dyn epi::Storage>> {
         } else {
             let mut config_dir = data_dir;
             config_dir.push("app.ron");
-            let storage = crate::persistence::FileStorage::from_path(config_dir);
+            let storage =
+                crate::persistence::FileStorage::from_path(config_dir);
             Some(Box::new(storage))
         }
     } else {
@@ -159,14 +196,22 @@ fn integration_info(
 }
 
 fn load_icon(icon_data: epi::IconData) -> Option<glutin::window::Icon> {
-    glutin::window::Icon::from_rgba(icon_data.rgba, icon_data.width, icon_data.height).ok()
+    glutin::window::Icon::from_rgba(
+        icon_data.rgba,
+        icon_data.width,
+        icon_data.height,
+    )
+    .ok()
 }
 
 // ----------------------------------------------------------------------------
 
 /// Run an egui app
-pub fn run(mut app: Box<dyn epi::App>, nativve_options: epi::NativeOptions) -> ! {
-    let mut storage = create_storage(app.name());
+pub fn run(
+    mut app: Box<dyn epi::App>,
+    nativve_options: epi::NativeOptions,
+) -> ! {
+    let storage = create_storage(app.name());
 
     #[cfg(feature = "http")]
     let http = std::sync::Arc::new(crate::http::GliumHttp {});
@@ -174,11 +219,17 @@ pub fn run(mut app: Box<dyn epi::App>, nativve_options: epi::NativeOptions) -> !
     let window_settings = deserialize_window_settings(&storage);
     let event_loop = glutin::event_loop::EventLoop::with_user_event();
     let icon = nativve_options.icon_data.clone().and_then(load_icon);
-    let display = create_display(&*app, &nativve_options, window_settings, icon, &event_loop);
+    let display = create_display(
+        &*app,
+        &nativve_options,
+        window_settings,
+        icon,
+        &event_loop,
+    );
 
-    let repaint_signal = std::sync::Arc::new(GliumRepaintSignal(std::sync::Mutex::new(
-        event_loop.create_proxy(),
-    )));
+    let repaint_signal = std::sync::Arc::new(GliumRepaintSignal(
+        std::sync::Mutex::new(event_loop.create_proxy()),
+    ));
 
     let mut egui = EguiGlium::new(&display);
     *egui.ctx().memory() = deserialize_memory(&storage).unwrap_or_default();
@@ -261,7 +312,8 @@ pub fn run(mut app: Box<dyn epi::App>, nativve_options: epi::NativeOptions) -> !
             app.update(ctx, &mut frame);
             let (needs_repaint, shapes) = egui.end_frame(&display);
 
-            let frame_time = (Instant::now() - frame_start).as_secs_f64() as f32;
+            let frame_time =
+                (Instant::now() - frame_start).as_secs_f64() as f32;
             previous_frame_time = Some(frame_time);
 
             {
@@ -284,10 +336,16 @@ pub fn run(mut app: Box<dyn epi::App>, nativve_options: epi::NativeOptions) -> !
                 if let Some(window_size) = window_size {
                     display.gl_window().window().set_inner_size(
                         glutin::dpi::PhysicalSize {
-                            width: (egui.ctx().pixels_per_point() * window_size.x).round(),
-                            height: (egui.ctx().pixels_per_point() * window_size.y).round(),
+                            width: (egui.ctx().pixels_per_point()
+                                * window_size.x)
+                                .round(),
+                            height: (egui.ctx().pixels_per_point()
+                                * window_size.y)
+                                .round(),
                         }
-                        .to_logical::<f32>(native_pixels_per_point(&display) as f64),
+                        .to_logical::<f32>(
+                            native_pixels_per_point(&display) as f64,
+                        ),
                     );
                 }
 
@@ -310,7 +368,11 @@ pub fn run(mut app: Box<dyn epi::App>, nativve_options: epi::NativeOptions) -> !
                         WINDOW_KEY,
                         &WindowSettings::from_display(&display),
                     );
-                    epi::set_value(storage.as_mut(), EGUI_MEMORY_KEY, &*egui.ctx().memory());
+                    epi::set_value(
+                        storage.as_mut(),
+                        EGUI_MEMORY_KEY,
+                        &*egui.ctx().memory(),
+                    );
                     app.save(storage.as_mut());
                     storage.flush();
                     last_auto_save = now;
@@ -322,15 +384,21 @@ pub fn run(mut app: Box<dyn epi::App>, nativve_options: epi::NativeOptions) -> !
             // Platform-dependent event handlers to workaround a winit bug
             // See: https://github.com/rust-windowing/winit/issues/987
             // See: https://github.com/rust-windowing/winit/issues/1619
-            glutin::event::Event::RedrawEventsCleared if cfg!(windows) => redraw(),
-            glutin::event::Event::RedrawRequested(_) if !cfg!(windows) => redraw(),
+            glutin::event::Event::RedrawEventsCleared if cfg!(windows) => {
+                redraw()
+            }
+            glutin::event::Event::RedrawRequested(_) if !cfg!(windows) => {
+                redraw()
+            }
 
             glutin::event::Event::WindowEvent { event, .. } => {
                 if egui.is_quit_event(&event) {
-                    *control_flow = glium::glutin::event_loop::ControlFlow::Exit;
+                    *control_flow =
+                        glium::glutin::event_loop::ControlFlow::Exit;
                 }
 
-                if let glutin::event::WindowEvent::Focused(new_focused) = event {
+                if let glutin::event::WindowEvent::Focused(new_focused) = event
+                {
                     is_focused = new_focused;
                 }
 
@@ -347,7 +415,11 @@ pub fn run(mut app: Box<dyn epi::App>, nativve_options: epi::NativeOptions) -> !
                         WINDOW_KEY,
                         &WindowSettings::from_display(&display),
                     );
-                    epi::set_value(storage.as_mut(), EGUI_MEMORY_KEY, &*egui.ctx().memory());
+                    epi::set_value(
+                        storage.as_mut(),
+                        EGUI_MEMORY_KEY,
+                        &*egui.ctx().memory(),
+                    );
                     app.save(storage.as_mut());
                     storage.flush();
                 }

@@ -352,7 +352,10 @@ impl Storage for DummyStorage {
 
 /// Get and deserialize the [RON](https://github.com/ron-rs/ron) stored at the given key.
 #[cfg(feature = "ron")]
-pub fn get_value<T: serde::de::DeserializeOwned>(storage: &dyn Storage, key: &str) -> Option<T> {
+pub fn get_value<T: serde::de::DeserializeOwned>(
+    storage: &dyn Storage,
+    key: &str,
+) -> Option<T> {
     storage
         .get_string(key)
         .and_then(|value| ron::from_str(&value).ok())
@@ -360,7 +363,11 @@ pub fn get_value<T: serde::de::DeserializeOwned>(storage: &dyn Storage, key: &st
 
 /// Serialize the given value as [RON](https://github.com/ron-rs/ron) and store with the given key.
 #[cfg(feature = "ron")]
-pub fn set_value<T: serde::Serialize>(storage: &mut dyn Storage, key: &str, value: &T) {
+pub fn set_value<T: serde::Serialize>(
+    storage: &mut dyn Storage,
+    key: &str,
+    value: &T,
+) {
     storage.set_string(
         key,
         ron::ser::to_string_pretty(value, Default::default()).unwrap(),
@@ -448,7 +455,9 @@ pub mod backend {
         fn fetch_dyn(
             &self,
             request: http::Request,
-            on_done: Box<dyn FnOnce(Result<http::Response, http::Error>) + Send>,
+            on_done: Box<
+                dyn FnOnce(Result<http::Response, http::Error>) + Send,
+            >,
         );
     }
 

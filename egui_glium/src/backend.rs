@@ -123,10 +123,11 @@ fn create_display(
         glium::Display::new(window_builder, context_builder, event_loop)
             .unwrap();
 
-    let center = calculate_center_position(&display);
+    if let Some(center) = calculate_center_position(&display) {
     display.gl_window().window().set_outer_position(center);
     if let Some(window_settings) = &window_settings {
         window_settings.restore_positions(&display);
+    }
     }
 
     display
@@ -134,10 +135,10 @@ fn create_display(
 
 fn calculate_center_position(
     display: &glium::Display,
-) -> glutin::dpi::Position {
+) -> Option<glutin::dpi::Position> {
     let display_gl_window = display.gl_window();
     let display_window = display_gl_window.window();
-    let monitor = display_window.current_monitor().unwrap();
+    let monitor = display_window.current_monitor()?;
     let monitor_size = monitor.size();
     let monitor_scale_factor = monitor.scale_factor();
     let monitor_logical_size: glutin::dpi::LogicalSize<f64> =
@@ -146,10 +147,12 @@ fn calculate_center_position(
     let window_size = display_window.outer_size();
     let window_logical_size: glutin::dpi::LogicalSize<f64> =
         window_size.to_logical(monitor_scale_factor);
-    glutin::dpi::Position::Logical(glutin::dpi::LogicalPosition::new(
+    let position = glutin::dpi::Position::Logical(glutin::dpi::LogicalPosition::new(
         monitor_logical_size.width / 2f64 - window_logical_size.width / 2f64,
         monitor_logical_size.height / 2f64 - window_logical_size.height / 2f64,
-    ))
+    ));
+
+    Some(position)
 }
 
 #[cfg(not(feature = "persistence"))]
